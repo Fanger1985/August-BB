@@ -30,7 +30,7 @@ bool isMoving = false;
 
 // Timing
 unsigned long previousMillis = 0;
-const long interval = 30;  // Adjusted time between each step
+const long interval = 20;  // Adjusted time between each step
 
 // Adjusted Pulse Width Range
 #define SERVOMIN  100  // Minimum pulse length out of 4096 (adjusted for MG995)
@@ -74,34 +74,34 @@ void updateMovement() {
     if (currentMillis - previousMillis >= interval) {
         previousMillis = currentMillis;
 
-        // Smooth pan movement with smaller step
+        // Smooth pan movement with balanced speed
         if (panAngle != targetPanAngle) {
             if (abs(panAngle - targetPanAngle) > 0.5) {
-                panAngle += (panAngle < targetPanAngle) ? 0.5 : -0.5; // Smaller step size
+                panAngle += (panAngle < targetPanAngle) ? 4 : -4; // Step size reduced to 4
             } else {
                 panAngle = targetPanAngle; // Snap to target if very close
             }
             pwm.setPWM(servoPanChannel, 0, angleToPulse(panAngle, false));
         }
 
-        // Smooth tilt movement with limiter
+        // Smooth tilt movement with balanced speed
         if (tiltAngle != targetTiltAngle) {
             float constrainedTilt = constrain(targetTiltAngle, 70, 160); // Limit downward tilt to 70 degrees
             if (tiltAngle != constrainedTilt) {
-                tiltAngle += (tiltAngle < constrainedTilt) ? 1 : -1;
+                tiltAngle += (tiltAngle < constrainedTilt) ? 4 : -4; // Step size reduced to 4
                 pwm.setPWM(servoTiltChannel, 0, angleToPulse(tiltAngle, true));
             }
         }
 
         // Smooth right ear movement
         if (rightEarAngle != targetRightEarAngle) {
-            rightEarAngle += (rightEarAngle < targetRightEarAngle) ? 1 : -1;
+            rightEarAngle += (rightEarAngle < targetRightEarAngle) ? 2 : -2;
             pwm.setPWM(servoRightEarChannel, 0, rightEarAngleToPulse(rightEarAngle));
         }
 
         // Smooth left ear movement
         if (leftEarAngle != targetLeftEarAngle) {
-            leftEarAngle += (leftEarAngle < targetLeftEarAngle) ? 1 : -1;
+            leftEarAngle += (leftEarAngle < targetLeftEarAngle) ? 2 : -2;
             pwm.setPWM(servoLeftEarChannel, 0, leftEarAngleToPulse(leftEarAngle));
         }
 
