@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BB-1 Object Tracking</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        h1 { 
+            margin: 20px 0; 
+            font-size: 1.5em;
+        }
+        #video-container {
+            position: relative;
+            display: inline-block;
+        }
+        #camera-feed, #output-canvas { 
+            max-width: 100%; 
+            height: auto; 
+            display: block;
+        }
+        #output-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            pointer-events: none; /* Makes sure the canvas doesn't capture any mouse events */
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .button { 
+            padding: 10px; 
+            margin: 5px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            background-color: #008CBA; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            flex: 1 1 100px;
+        }
+        .button:active { 
+            background-color: #005f73; 
+        }
+        @media (max-width: 768px) {
+            h1 { font-size: 1.2em; }
+            .button { 
+                padding: 8px; 
+                margin: 3px; 
+                font-size: 14px; 
+                flex: 1 1 80px; 
+            }
+        }
+        @media (max-width: 480px) {
+            h1 { font-size: 1em; }
+            .button { 
+                padding: 6px; 
+                margin: 2px; 
+                font-size: 12px; 
+                flex: 1 1 60px; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>BB-1 Object Tracking</h1>
+    <div id="video-container">
+        <video id="camera-feed" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button class="button" onclick="sendControlManual('/left')">Pan Left</button>
+        <button class="button" onclick="sendControlManual('/right')">Pan Right</button>
+        <button class="button" onclick="sendControlManual('/up')">Tilt Up</button>
+        <button class="button" onclick="sendControlManual('/down')">Tilt Down</button>
+        <button class="button" onclick="sendControlManual('/center')">Center</button>
+        <button class="button" onclick="toggleTracking()">Toggle Tracking</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script>
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('output-canvas');
+        const ctx = canvas.getContext('2d');
+        let isTracking = false;
+        let model;
+
+        // Load the model and handle the video feed
+        cocoSsd.load().then(loadedModel => {
+            model = loadedModel;
+            console.log("Model loaded successfully");
+
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    return video.play();
+                })
+                .then(() => {
+                    console.log('Video feed started');
+                    adjustCanvasSize();
+                    detectFrame();
+                })
+                .catch(err => console.error('Failed to start video stream:', err));
+        }).catch(err => console.error('Failed to load model:', err));
+
+        function adjustCanvasSize() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        }
+
+        async function detectFrame() {
+            if (!model) {
+                console.error('Model is not loaded yet!');
+                return;
+            }
+
+            // Perform detection
+            const predictions = await model.detect(video);
+            console.log('Predictions:', predictions);
+
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw predictions
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                ctx.strokeStyle = 'blue';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+                ctx.fillStyle = 'blue';
+                ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
+
+                if (isTracking) {
+                    const centerX = x + width / 2;
+                    const centerY = y + height / 2;
+                    sendControl(centerX, centerY);
+                }
+            });
+
+            requestAnimationFrame(detectFrame); // Continue detecting
+        }
+
+        function sendControl(centerX, centerY) {
+            const canvasMidX = canvas.width / 2;
+            const canvasMidY = canvas.height / 2;
+
+            let panMove = '';
+            let tiltMove = '';
+
+            if (centerX < canvasMidX - 50) {
+                panMove = '/left';
+            } else if (centerX > canvasMidX + 50) {
+                panMove = '/right';
+            }
+
+            if (centerY < canvasMidY - 50) {
+                tiltMove = '/up';
+            } else if (centerY > canvasMidY + 50) {
+                tiltMove = '/down';
+            }
+
+            if (panMove) fetch(`http://192.168.1.104${panMove}`).catch(err => console.error('Failed to send pan command:', err));
+            if (tiltMove) fetch(`http://192.168.1.104${tiltMove}`).catch(err => console.error('Failed to send tilt command:', err));
+        }
+
+        function sendControlManual(command) {
+            fetch(`http://192.168.1.104${command}`)
+                .then(response => console.log('Command sent:', command))
+                .catch(err => console.error('Failed to send command:', err));
+        }
+
+        function toggleTracking() {
+            isTracking = !isTracking;
+            console.log('Tracking:', isTracking);
+        }
+
+        // Adjust the canvas size whenever the window is resized
+        window.addEventListener('resize', adjustCanvasSize);
+    </script>
+</body>
+</html>
