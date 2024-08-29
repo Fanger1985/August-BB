@@ -28,6 +28,12 @@ float targetRightEarAngle = -10;  // "Ready" position
 float targetLeftEarAngle = -10;   // "Ready" position
 bool isMoving = false;
 
+// Speed and acceleration settings
+float panSpeed = 2;   // Adjust the pan speed dynamically
+float tiltSpeed = 2;  // Adjust the tilt speed dynamically
+float panAcceleration = 0.1;  // Adjust pan acceleration
+float tiltAcceleration = 0.1; // Adjust tilt acceleration
+
 // Timing
 unsigned long previousMillis = 0;
 const long interval = 20;  // Adjusted time between each step
@@ -74,23 +80,27 @@ void updateMovement() {
     if (currentMillis - previousMillis >= interval) {
         previousMillis = currentMillis;
 
-        // Smooth pan movement with balanced speed
+        // Smooth pan movement with adjustable speed and acceleration
         if (panAngle != targetPanAngle) {
-            if (abs(panAngle - targetPanAngle) > 0.5) {
-                panAngle += (panAngle < targetPanAngle) ? 4 : -4; // Step size reduced to 4
+            float step = panSpeed * panAcceleration;
+            if (abs(panAngle - targetPanAngle) > step) {
+                panAngle += (panAngle < targetPanAngle) ? step : -step;
             } else {
                 panAngle = targetPanAngle; // Snap to target if very close
             }
             pwm.setPWM(servoPanChannel, 0, angleToPulse(panAngle, false));
         }
 
-        // Smooth tilt movement with balanced speed
+        // Smooth tilt movement with adjustable speed and acceleration
         if (tiltAngle != targetTiltAngle) {
             float constrainedTilt = constrain(targetTiltAngle, 70, 160); // Limit downward tilt to 70 degrees
-            if (tiltAngle != constrainedTilt) {
-                tiltAngle += (tiltAngle < constrainedTilt) ? 4 : -4; // Step size reduced to 4
-                pwm.setPWM(servoTiltChannel, 0, angleToPulse(tiltAngle, true));
+            float step = tiltSpeed * tiltAcceleration;
+            if (abs(tiltAngle - constrainedTilt) > step) {
+                tiltAngle += (tiltAngle < constrainedTilt) ? step : -step;
+            } else {
+                tiltAngle = constrainedTilt; // Snap to target if very close
             }
+            pwm.setPWM(servoTiltChannel, 0, angleToPulse(tiltAngle, true));
         }
 
         // Smooth right ear movement
@@ -105,6 +115,7 @@ void updateMovement() {
             pwm.setPWM(servoLeftEarChannel, 0, leftEarAngleToPulse(leftEarAngle));
         }
 
+        // Stop movement when all targets are reached
         if (panAngle == targetPanAngle && tiltAngle == targetTiltAngle && rightEarAngle == targetRightEarAngle && leftEarAngle == targetLeftEarAngle) {
             isMoving = false;
         }
@@ -146,27 +157,33 @@ void setup() {
         html += "<h1>BB-1 Head Control</h1>";
         html += "<p>Pan Angle: <span id='panAngle'>" + String(panAngle) + "</span></p>";
         html += "<p>Tilt Angle: <span id='tiltAngle'>" + String(tiltAngle) + "</span></p>";
-        html += "<p>Right Ear Angle: <span id='rightEarAngle'>" + String(rightEarAngle) + "</span></p>";
-        html += "<p>Left Ear Angle: <span id='leftEarAngle'>" + String(leftEarAngle) + "</span></p>";
-        html += "<button class='btn' onmousedown=\"fetch('/down')\" onmouseup=\"fetch('/stop')\">Tilt Head Down</button>";
+        html += "<p>Pan Speed: <span id='panSpeed'>" + String(panSpeed) + "</span></p>";
+        html += "<p>Tilt Speed: <span id='tiltSpeed'>" + String(tiltSpeed) + "</span></p>";
+        html += "<p>Pan Acceleration: <span id='panAcceleration'>" + String(panAcceleration) + "</span></p>";
+        html += "<p>Tilt Acceleration: <span id='tiltAcceleration'>" + String(tiltAcceleration) + "</span></p>";
+        html += "<button class='btn' onclick=\"fetch('/increase_pan_speed')\">Increase Pan Speed</button>";
+        html += "<button class='btn' onclick=\"fetch('/decrease_pan_speed')\">Decrease Pan Speed</button>";
+        html += "<button class='btn' onclick=\"fetch('/increase_tilt_speed')\">Increase Tilt Speed</button>";
+        html += "<button class='btn' onclick=\"fetch('/decrease_tilt_speed')\">Decrease Tilt Speed</button>";
+        html += "<button class='btn' onclick=\"fetch('/increase_pan_acceleration')\">Increase Pan Acceleration</button>";
+        html += "<button class='btn' onclick=\"fetch('/decrease_pan_acceleration')\">Decrease Pan Acceleration</button>";
+        html += "<button class='btn' onclick=\"fetch('/increase_tilt_acceleration')\">Increase Tilt Acceleration</button>";
+        html += "<button class='btn' onclick=\"fetch('/decrease_tilt_acceleration')\">Decrease Tilt Acceleration</button>";
         html += "<button class='btn' onmousedown=\"fetch('/up')\" onmouseup=\"fetch('/stop')\">Tilt Head Up</button>";
+        html += "<button class='btn' onmousedown=\"fetch('/down')\" onmouseup=\"fetch('/stop')\">Tilt Head Down</button>";
         html += "<button class='btn' onmousedown=\"fetch('/left')\" onmouseup=\"fetch('/stop')\">Pan Left</button>";
         html += "<button class='btn' onmousedown=\"fetch('/right')\" onmouseup=\"fetch('/stop')\">Pan Right</button>";
         html += "<button class='btn' onclick=\"fetch('/center')\">Center</button>";
-        html += "<button class='btn' onclick=\"fetch('/ninety')\">90</button>";
-        html += "<button class='btn' onmousedown=\"fetch('/right_ear_up')\" onmouseup=\"fetch('/stop')\">Right Ear Up</button>";
-        html += "<button class='btn' onmousedown=\"fetch('/right_ear_down')\" onmouseup=\"fetch('/stop')\">Right Ear Down</button>";
-        html += "<button class='btn' onmousedown=\"fetch('/left_ear_up')\" onmouseup=\"fetch('/stop')\">Left Ear Up</button>";
-        html += "<button class='btn' onmousedown=\"fetch('/left_ear_down')\" onmouseup=\"fetch('/stop')\">Left Ear Down</button>";
-        html += "<button class='btn' onclick=\"fetch('/demo')\">Demo</button>";
         html += "</div>";
         html += "<script>";
         html += "function updateAngles() {";
         html += "fetch('/angles').then(response => response.json()).then(data => {";
         html += "document.getElementById('panAngle').innerText = data.pan;";
         html += "document.getElementById('tiltAngle').innerText = data.tilt;";
-        html += "document.getElementById('rightEarAngle').innerText = data.rightEar;";
-        html += "document.getElementById('leftEarAngle').innerText = data.leftEar;";
+        html += "document.getElementById('panSpeed').innerText = data.panSpeed;";
+        html += "document.getElementById('tiltSpeed').innerText = data.tiltSpeed;";
+        html += "document.getElementById('panAcceleration').innerText = data.panAcceleration;";
+        html += "document.getElementById('tiltAcceleration').innerText = data.tiltAcceleration;";
         html += "});";
         html += "}";
         html += "setInterval(updateAngles, 1000);";  // Update angles every second
@@ -175,11 +192,15 @@ void setup() {
         request->send(200, "text/html", html);
     });
 
-    // API endpoint to return current angles
+    // API endpoint to return current angles, speeds, and accelerations
     server.on("/angles", HTTP_GET, [](AsyncWebServerRequest *request){
         String json = "{";
         json += "\"pan\":" + String(panAngle) + ",";
         json += "\"tilt\":" + String(tiltAngle) + ",";
+        json += "\"panSpeed\":" + String(panSpeed) + ",";
+        json += "\"tiltSpeed\":" + String(tiltSpeed) + ",";
+        json += "\"panAcceleration\":" + String(panAcceleration) + ",";
+        json += "\"tiltAcceleration\":" + String(tiltAcceleration) + ",";
         json += "\"rightEar\":" + String(rightEarAngle) + ",";
         json += "\"leftEar\":" + String(leftEarAngle);
         json += "}";
@@ -212,85 +233,45 @@ void setup() {
         request->send(204); // No content response
     });
 
-    server.on("/ninety", HTTP_GET, [](AsyncWebServerRequest *request){
-        startMovement(90, 50, -10, -10);
-        request->send(204); // No content response
+    // Speed and Acceleration Control Endpoints
+    server.on("/increase_pan_speed", HTTP_GET, [](AsyncWebServerRequest *request){
+        panSpeed += 0.5;
+        request->send(204);
     });
 
-    server.on("/right_ear_up", HTTP_GET, [](AsyncWebServerRequest *request){
-        startMovement(targetPanAngle, targetTiltAngle, targetRightEarAngle + 1, targetLeftEarAngle);
-        request->send(204); // No content response
+    server.on("/decrease_pan_speed", HTTP_GET, [](AsyncWebServerRequest *request){
+        panSpeed = max(0.5, panSpeed - 0.5);  // Minimum speed is 0.5
+        request->send(204);
     });
 
-    server.on("/right_ear_down", HTTP_GET, [](AsyncWebServerRequest *request){
-        startMovement(targetPanAngle, targetTiltAngle, targetRightEarAngle - 1, targetLeftEarAngle);
-        request->send(204); // No content response
+    server.on("/increase_tilt_speed", HTTP_GET, [](AsyncWebServerRequest *request){
+        tiltSpeed += 0.5;
+        request->send(204);
     });
 
-    server.on("/left_ear_up", HTTP_GET, [](AsyncWebServerRequest *request){
-        startMovement(targetPanAngle, targetTiltAngle, targetRightEarAngle, targetLeftEarAngle - 1);
-        request->send(204); // No content response
+    server.on("/decrease_tilt_speed", HTTP_GET, [](AsyncWebServerRequest *request){
+        tiltSpeed = max(0.5, tiltSpeed - 0.5);  // Minimum speed is 0.5
+        request->send(204);
     });
 
-    server.on("/left_ear_down", HTTP_GET, [](AsyncWebServerRequest *request){
-        startMovement(targetPanAngle, targetTiltAngle, targetRightEarAngle, targetLeftEarAngle + 1);
-        request->send(204); // No content response
+    server.on("/increase_pan_acceleration", HTTP_GET, [](AsyncWebServerRequest *request){
+        panAcceleration += 0.05;
+        request->send(204);
     });
 
-    server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request){
-        isMoving = false; // Stop all movement
-        request->send(204); // No content response
+    server.on("/decrease_pan_acceleration", HTTP_GET, [](AsyncWebServerRequest *request){
+        panAcceleration = max(0.05, panAcceleration - 0.05);  // Minimum acceleration is 0.05
+        request->send(204);
     });
 
-    // Handle Demo command
-    server.on("/demo", HTTP_GET, [](AsyncWebServerRequest *request){
-        // Center head and set initial ear positions
-        startMovement(120, 90, -15, -5);
-        delay(1000);
+    server.on("/increase_tilt_acceleration", HTTP_GET, [](AsyncWebServerRequest *request){
+        tiltAcceleration += 0.05;
+        request->send(204);
+    });
 
-        // Wiggle ears
-        for (int i = 0; i < 3; i++) {
-            startMovement(120, 90, -10, -10);
-            delay(500);
-            startMovement(120, 90, -15, -5);
-            delay(500);
-        }
-
-        // Move ears to opposite positions
-        startMovement(120, 90, -5, -15);
-        delay(1000);
-
-        // Pan head from side to side
-        for (int i = 0; i < 3; i++) {
-            startMovement(200, 90, rightEarAngle, leftEarAngle);
-            isMoving = true;
-            while (isMoving) updateMovement();
-            delay(1000);
-            
-            startMovement(0, 90, rightEarAngle, leftEarAngle);
-            isMoving = true;
-            while (isMoving) updateMovement();
-            delay(1000);
-        }
-
-        // Pan head while tilting up and down
-        for (int i = 0; i < 2; i++) {
-            startMovement(200, 70, rightEarAngle, leftEarAngle);
-            isMoving = true;
-            while (isMoving) updateMovement();
-            delay(1000);
-            
-            startMovement(0, 112, rightEarAngle, leftEarAngle);
-            isMoving = true;
-            while (isMoving) updateMovement();
-            delay(1000);
-        }
-
-        // Reset to center
-        startMovement(120, 90, -10, -10);
-        isMoving = true;
-        while (isMoving) updateMovement();
-        request->send(204); // No content response
+    server.on("/decrease_tilt_acceleration", HTTP_GET, [](AsyncWebServerRequest *request){
+        tiltAcceleration = max(0.05, tiltAcceleration - 0.05);  // Minimum acceleration is 0.05
+        request->send(204);
     });
 
     // Start server

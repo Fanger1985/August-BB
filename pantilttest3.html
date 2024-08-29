@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BB-1 Object and Face Tracking</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        h1 { 
+            margin: 20px 0; 
+            font-size: 1.5em;
+        }
+        #video-container {
+            position: relative;
+            display: inline-block;
+        }
+        #camera-feed, #output-canvas { 
+            max-width: 100%; 
+            height: auto; 
+            display: block;
+        }
+        #output-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .button { 
+            padding: 10px; 
+            margin: 5px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            background-color: #008CBA; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            flex: 1 1 100px;
+        }
+        .button:active { 
+            background-color: #005f73; 
+        }
+        @media (max-width: 768px) {
+            h1 { font-size: 1.2em; }
+            .button { 
+                padding: 8px; 
+                margin: 3px; 
+                font-size: 14px; 
+                flex: 1 1 80px; 
+            }
+        }
+        @media (max-width: 480px) {
+            h1 { font-size: 1em; }
+            .button { 
+                padding: 6px; 
+                margin: 2px; 
+                font-size: 12px; 
+                flex: 1 1 60px; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>BB-1 Object and Face Tracking</h1>
+    <div id="video-container">
+        <video id="camera-feed" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button class="button" onclick="sendControlManual('/left')">Pan Left</button>
+        <button class="button" onclick="sendControlManual('/right')">Pan Right</button>
+        <button class="button" onclick="sendControlManual('/up')">Tilt Up</button>
+        <button class="button" onclick="sendControlManual('/down')">Tilt Down</button>
+        <button class="button" onclick="sendControlManual('/center')">Center</button>
+        <button class="button" onclick="toggleObjectTracking()">Toggle Object Tracking</button>
+        <button class="button" onclick="toggleFaceTracking()">Toggle Face Tracking</button>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<script>
+    const video = document.getElementById('camera-feed');
+    const canvas = document.getElementById('output-canvas');
+    const ctx = canvas.getContext('2d');
+    let isObjectTracking = false;
+    let isFaceTracking = false;
+    let objectModel, faceModel;
+    let panAngle = 120; // Centered at 120
+    let tiltAngle = 90; // Centered at 90
+
+    // Load the models for object and face detection
+    async function loadModels() {
+        try {
+            objectModel = await cocoSsd.load();
+            faceModel = await blazeface.load(); // Load BlazeFace for simpler face detection
+            console.log("Models loaded successfully");
+
+            // Start the video feed after models are loaded
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    return video.play();
+                })
+                .then(() => {
+                    console.log('Video feed started');
+                    adjustCanvasSize();
+                    detectFrame();
+                })
+                .catch(err => console.error('Failed to start video stream:', err));
+        } catch (err) {
+            console.error('Failed to load models:', err);
+        }
+    }
+
+    loadModels();
+
+    function adjustCanvasSize() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    }
+
+    async function detectFrame() {
+        if (isObjectTracking && objectModel) {
+            await detectObjects();
+        } else if (isFaceTracking && faceModel) {
+            await detectFaces();
+        }
+
+        requestAnimationFrame(detectFrame); // Continue detecting
+    }
+
+    async function detectObjects() {
+        // Perform object detection
+        const predictions = await objectModel.detect(video);
+        console.log('Object Predictions:', predictions);
+
+        // Clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw object predictions
+        predictions.forEach(prediction => {
+            const [x, y, width, height] = prediction.bbox;
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, width, height);
+            ctx.fillStyle = 'blue';
+            ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
+
+            const centerX = x + width / 2;
+            const centerY = y + height / 2;
+            sendControl(centerX, centerY);
+        });
+    }
+
+    async function detectFaces() {
+        try {
+            // Perform face detection
+            const predictions = await faceModel.estimateFaces(video, false); // No flipHorizontal needed
+            console.log('Face Predictions:', predictions);
+
+            if (predictions.length === 0) {
+                console.warn("No faces detected. Check lighting and camera settings.");
+            }
+
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw face predictions with bounding boxes
+            predictions.forEach(prediction => {
+                const { topLeft, bottomRight, probability } = prediction;
+                const [x, y] = topLeft;
+                const [x2, y2] = bottomRight;
+                const width = x2 - x;
+                const height = y2 - y;
+
+                if (probability[0] > 0.5) { // Only consider detections with a reasonable confidence level
+                    ctx.strokeStyle = 'green';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, width, height);
+                    ctx.fillStyle = 'green';
+                    ctx.fillText('Face', x, y > 10 ? y - 5 : 10);
+
+                    const centerX = x + width / 2;
+                    const centerY = y + height / 2;
+                    sendControl(centerX, centerY);
+                } else {
+                    console.warn("Face detected but confidence too low.");
+                }
+            });
+        } catch (error) {
+            console.error("Error during face detection:", error);
+        }
+    }
+
+    function sendControl(centerX, centerY) {
+        const canvasMidX = canvas.width / 2;
+        const canvasMidY = canvas.height / 2;
+
+        let panMove = '';
+        let tiltMove = '';
+
+        // Proportional adjustments for smoother tracking
+        const maxDeviationX = 200; // Maximum allowable deviation from center
+        const maxDeviationY = 150; // Maximum allowable deviation from center
+
+        // Calculate proportional distances to center and map them to servo movements
+        let proportionalPanSpeed = ((centerX - canvasMidX) / maxDeviationX) * 5; // Speed scales with deviation
+        let proportionalTiltSpeed = ((centerY - canvasMidY) / maxDeviationY) * 5; // Speed scales with deviation
+
+        // Define boundaries for smoother clamping
+        const maxTilt = isFaceTracking ? 110 : 105;
+        const minTilt = 80;
+        const maxPan = 160;
+        const minPan = 80;
+
+        // Adjust pan within range based on proportional speed
+        if (Math.abs(proportionalPanSpeed) > 1) {
+            if (centerX < canvasMidX) {
+                panMove = '/left';
+                panAngle = Math.max(minPan, panAngle - proportionalPanSpeed);
+            } else {
+                panMove = '/right';
+                panAngle = Math.min(maxPan, panAngle + proportionalPanSpeed);
+            }
+        }
+
+        // Adjust tilt within range based on proportional speed
+        if (Math.abs(proportionalTiltSpeed) > 1) {
+            if (centerY < canvasMidY) {
+                tiltMove = '/up';
+                tiltAngle = Math.max(minTilt, tiltAngle - proportionalTiltSpeed);
+            } else {
+                tiltMove = '/down';
+                tiltAngle = Math.min(maxTilt, tiltAngle + proportionalTiltSpeed);
+            }
+        }
+
+        // Send pan command if needed
+        if (panMove) {
+            fetch(`http://192.168.1.104${panMove}`)
+                .then(() => console.log('Pan angle:', panAngle))
+                .catch(err => console.error('Failed to send pan command:', err));
+        }
+
+        // Send tilt command if needed
+        if (tiltMove) {
+            fetch(`http://192.168.1.104${tiltMove}`)
+                .then(() => console.log('Tilt angle:', tiltAngle))
+                .catch(err => console.error('Failed to send tilt command:', err));
+        }
+    }
+
+    function sendControlManual(command) {
+        fetch(`http://192.168.1.104${command}`)
+            .then(response => console.log('Command sent:', command))
+            .catch(err => console.error('Failed to send command:', err));
+    }
+
+    function toggleObjectTracking() {
+        isObjectTracking = !isObjectTracking;
+        isFaceTracking = false; // Turn off face tracking if object tracking is enabled
+        console.log('Object Tracking:', isObjectTracking);
+    }
+
+    function toggleFaceTracking() {
+        isFaceTracking = !isFaceTracking;
+        isObjectTracking = false; // Turn off object tracking if face tracking is enabled
+        console.log('Face Tracking:', isFaceTracking);
+    }
+
+    // Adjust the canvas size whenever the window is resized
+    window.addEventListener('resize', adjustCanvasSize);
+</script>
+</body>
+</html>
