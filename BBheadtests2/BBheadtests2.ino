@@ -403,16 +403,17 @@ void setup() {
         request->send(204);
     });
 
-    // Camera control handlers
-    server.on("/camera_pan_left", HTTP_GET, [](AsyncWebServerRequest *request){
-        startCameraMovement(constrain(targetCameraPanAngle - 10, 0, 180), targetCameraTiltAngle);
-        request->send(204);
-    });
+// Camera control handlers
+server.on("/camera_pan_left", HTTP_GET, [](AsyncWebServerRequest *request){
+    startCameraMovement(constrain(targetCameraPanAngle + 10, 0, 180), targetCameraTiltAngle); // Corrected: left should move left
+    request->send(204);
+});
 
-    server.on("/camera_pan_right", HTTP_GET, [](AsyncWebServerRequest *request){
-        startCameraMovement(constrain(targetCameraPanAngle + 10, 0, 180), targetCameraTiltAngle);
-        request->send(204);
-    });
+server.on("/camera_pan_right", HTTP_GET, [](AsyncWebServerRequest *request){
+    startCameraMovement(constrain(targetCameraPanAngle - 10, 0, 180), targetCameraTiltAngle); // Corrected: right should move right
+    request->send(204);
+});
+
 
     server.on("/camera_tilt_up", HTTP_GET, [](AsyncWebServerRequest *request){
         startCameraMovement(targetCameraPanAngle, constrain(targetCameraTiltAngle - 10, 0, 180));
