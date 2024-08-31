@@ -306,10 +306,10 @@ void setup() {
         html += "<button class='btn' onmousedown=\"fetch('/left')\" onmouseup=\"fetch('/stop')\">Pan Left</button>";
         html += "<button class='btn' onmousedown=\"fetch('/right')\" onmouseup=\"fetch('/stop')\">Pan Right</button>";
         html += "<button class='btn' onclick=\"fetch('/center')\">Center</button>";
-        html += "<button class='btn' onclick=\"fetch('/right_ear_up')\">Right Ear Up</button>";
-        html += "<button class='btn' onclick=\"fetch('/right_ear_down')\">Right Ear Down</button>";
-        html += "<button class='btn' onclick=\"fetch('/left_ear_up')\">Left Ear Up</button>";
-        html += "<button class='btn' onclick=\"fetch('/left_ear_down')\">Left Ear Down</button>";
+        html += "<button class='btn' onclick=\"fetch('/right_ear_back')\">Right Ear Back</button>";
+        html += "<button class='btn' onclick=\"fetch('/right_ear_forward')\">Right Ear Forward</button>";
+        html += "<button class='btn' onclick=\"fetch('/left_ear_back')\">Left Ear Back</button>";
+        html += "<button class='btn' onclick=\"fetch('/left_ear_forward')\">Left Ear Forward</button>";
         html += "<button class='btn' onclick=\"fetch('/camera_pan_left')\">Camera Pan Left</button>";
         html += "<button class='btn' onclick=\"fetch('/camera_pan_right')\">Camera Pan Right</button>";
         html += "<button class='btn' onclick=\"fetch('/camera_tilt_up')\">Camera Tilt Up</button>";
@@ -379,41 +379,40 @@ void setup() {
     });
 
     // Ear control handlers
-    server.on("/right_ear_up", HTTP_GET, [](AsyncWebServerRequest *request){
-        targetRightEarAngle = constrain(targetRightEarAngle + 5, 0, 180);  // Adjust as needed
+    server.on("/right_ear_back", HTTP_GET, [](AsyncWebServerRequest *request){
+        targetRightEarAngle = constrain(targetRightEarAngle + 5, 0, 180);  // Right ear moves back from 0 to 180 degrees
         isEarMoving = true;
         request->send(204);
     });
 
-    server.on("/right_ear_down", HTTP_GET, [](AsyncWebServerRequest *request){
-        targetRightEarAngle = constrain(targetRightEarAngle - 5, 0, 180);  // Adjust as needed
+    server.on("/right_ear_forward", HTTP_GET, [](AsyncWebServerRequest *request){
+        targetRightEarAngle = constrain(targetRightEarAngle - 5, 0, 180);  // Right ear moves forward from 180 to 0 degrees
         isEarMoving = true;
         request->send(204);
     });
 
-    server.on("/left_ear_up", HTTP_GET, [](AsyncWebServerRequest *request){
-        targetLeftEarAngle = constrain(targetLeftEarAngle + 5, 0, 180);  // Adjust as needed
+    server.on("/left_ear_back", HTTP_GET, [](AsyncWebServerRequest *request){
+        targetLeftEarAngle = constrain(targetLeftEarAngle - 5, 0, 180);  // Left ear moves back from 180 to 0 degrees
         isEarMoving = true;
         request->send(204);
     });
 
-    server.on("/left_ear_down", HTTP_GET, [](AsyncWebServerRequest *request){
-        targetLeftEarAngle = constrain(targetLeftEarAngle - 5, 0, 180);  // Adjust as needed
+    server.on("/left_ear_forward", HTTP_GET, [](AsyncWebServerRequest *request){
+        targetLeftEarAngle = constrain(targetLeftEarAngle + 5, 0, 180);  // Left ear moves forward from 0 to 180 degrees
         isEarMoving = true;
         request->send(204);
     });
 
-// Camera control handlers
-server.on("/camera_pan_left", HTTP_GET, [](AsyncWebServerRequest *request){
-    startCameraMovement(constrain(targetCameraPanAngle + 10, 0, 180), targetCameraTiltAngle); // Corrected: left should move left
-    request->send(204);
-});
+    // Camera control handlers
+    server.on("/camera_pan_left", HTTP_GET, [](AsyncWebServerRequest *request){
+        startCameraMovement(constrain(targetCameraPanAngle + 10, 0, 180), targetCameraTiltAngle); // Corrected: left should move left
+        request->send(204);
+    });
 
-server.on("/camera_pan_right", HTTP_GET, [](AsyncWebServerRequest *request){
-    startCameraMovement(constrain(targetCameraPanAngle - 10, 0, 180), targetCameraTiltAngle); // Corrected: right should move right
-    request->send(204);
-});
-
+    server.on("/camera_pan_right", HTTP_GET, [](AsyncWebServerRequest *request){
+        startCameraMovement(constrain(targetCameraPanAngle - 10, 0, 180), targetCameraTiltAngle); // Corrected: right should move right
+        request->send(204);
+    });
 
     server.on("/camera_tilt_up", HTTP_GET, [](AsyncWebServerRequest *request){
         startCameraMovement(targetCameraPanAngle, constrain(targetCameraTiltAngle - 10, 0, 180));
